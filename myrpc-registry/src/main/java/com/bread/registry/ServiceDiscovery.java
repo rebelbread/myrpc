@@ -1,15 +1,11 @@
 package com.bread.registry;
 
-import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.Watcher;
-import org.apache.zookeeper.ZooKeeper;
+import org.I0Itec.zkclient.ZkClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -24,44 +20,23 @@ public class ServiceDiscovery {
 
     private volatile List<String> dataList = new ArrayList<>();
 
-    private CountDownLatch cdl = new CountDownLatch(1);
-
     public ServiceDiscovery(String zookeeperAddress) {
         this.zookeeperAddress = zookeeperAddress;
-        ZooKeeper zk = connectServer(zookeeperAddress);
-        if (zk != null) {
-            watchNode(zk);
-        }
+//        ZooKeeper zk = connectServer(zookeeperAddress);
+        ZkClient zk = new ZkClient(zookeeperAddress, Constant.ZK_SESSION_TIMEOUT, Constant.ZK_CONNECTION_TIMEOUT);
+        zk.setZkSerializer(new StringZkSerializer());
+        watchNode(zk);
 
     }
 
-    private ZooKeeper connectServer(String zookeeperAddress) {
-        ZooKeeper zk = null;
-        try {
-            zk = new ZooKeeper(zookeeperAddress, Constant.ZK_SESSION_TIMEOUT, watchedEvent -> {
-                if (Watcher.Event.KeeperState.SyncConnected == watchedEvent.getState()) {
-                    cdl.countDown();
-                }
-            });
-            cdl.await();
-        } catch (IOException | InterruptedException e) {
-            LOGGER.warn("", e);
+    private void watchNode(ZkClient zk) {
+        List<String> children = zk.subscribeChildChanges(Constant.ZK_REGISTRY_PATH, (parentPath, currentChilds) -> watchNode(zk));
+        List<String> dataList = new ArrayList<>(children.size());
+        for (String child : children) {
+            byte[] data = zk.readData(Constant.ZK_REGISTRY_PATH + "/" + child);
+            dataList.add(new String(data));
         }
-        return zk;
-    }
-
-    private void watchNode(ZooKeeper zk) {
-        try {
-            List<String> children = zk.getChildren(Constant.ZK_REGISTRY_PATH, watchedEvent -> watchNode(zk));
-            List<String> dataList = new ArrayList<>(children.size());
-            for (String child : children) {
-                byte[] data = zk.getData(Constant.ZK_REGISTRY_PATH + "/" + child, false, null);
-                dataList.add(new String(data));
-            }
-            this.dataList = dataList;
-        } catch (KeeperException | InterruptedException e) {
-            LOGGER.warn("", e);
-        }
+        this.dataList = dataList;
     }
 
 

@@ -33,8 +33,8 @@ public class ServiceDiscovery {
         List<String> children = zk.subscribeChildChanges(Constant.ZK_REGISTRY_PATH, (parentPath, currentChilds) -> watchNode(zk));
         List<String> dataList = new ArrayList<>(children.size());
         for (String child : children) {
-            byte[] data = zk.readData(Constant.ZK_REGISTRY_PATH + "/" + child);
-            dataList.add(new String(data));
+            String data = zk.readData(Constant.ZK_REGISTRY_PATH + "/" + child);
+            dataList.add(data);
         }
         this.dataList = dataList;
     }
